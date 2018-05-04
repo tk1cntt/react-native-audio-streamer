@@ -27,6 +27,6 @@ dependencies {
     })
     compile 'com.android.support:appcompat-v7:25.0.1'
     testCompile 'junit:junit:4.12'
-    compile 'com.facebook.react:react-native:0.20.+'
+    compile "com.facebook.react:react-native:+"  // From node_modules
     compile 'com.google.android.exoplayer:exoplayer:2.7.3'
 }
