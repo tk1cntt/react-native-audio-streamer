@@ -2,6 +2,7 @@ package fm.indiecast.rnaudiostreamer;
 
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
 import android.util.Log;
 
 import com.facebook.react.bridge.Callback;
@@ -21,9 +22,14 @@ import com.google.android.exoplayer2.extractor.mkv.MatroskaExtractor;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.trackselection.TrackSelector;
+import com.google.android.exoplayer2.upstream.BandwidthMeter;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 
 public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements Player.EventListener {
@@ -66,14 +72,13 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
         LoadControl loadControl = new DefaultLoadControl();
         this.player = ExoPlayerFactory.newSimpleInstance(reactContext, trackSelector, loadControl);
 
-        // Create source
-        // ExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();
-        // DefaultBandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
-        // DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(reactContext, getDefaultUserAgent(), bandwidthMeter);
-        // Handler mainHandler = new Handler();
-        MediaSource audioSource = new ExtractorMediaSource.Factory(
-                new DefaultDataSourceFactory(reactContext, getDefaultUserAgent()))
-                .setExtractorsFactory(MatroskaExtractor.FACTORY)
+        // Measures bandwidth during playback. Can be null if not required.
+        DefaultBandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
+        // Produces DataSource instances through which media data is loaded.
+        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(reactContext,
+                getDefaultUserAgent(), bandwidthMeter);
+        // This is the MediaSource representing the media to be played.
+        MediaSource audioSource = new ExtractorMediaSource.Factory(dataSourceFactory)
                 .createMediaSource(Uri.parse(urlString));
         // Start preparing audio
         player.prepare(audioSource);
