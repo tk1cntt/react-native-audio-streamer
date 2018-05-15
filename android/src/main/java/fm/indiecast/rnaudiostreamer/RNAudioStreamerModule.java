@@ -1,40 +1,38 @@
 package fm.indiecast.rnaudiostreamer;
 
+import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
-import android.os.Build;
-import android.net.Uri;
 
+import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.Callback;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
-
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.ExoPlaybackException;
-import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.LoadControl;
+import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
-import com.google.android.exoplayer2.extractor.ExtractorsFactory;
+import com.google.android.exoplayer2.extractor.mkv.MatroskaExtractor;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.trackselection.TrackSelector;
+import com.google.android.exoplayer2.upstream.BandwidthMeter;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.List;
-
-public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements ExoPlayer.EventListener, ExtractorMediaSource.EventListener{
+public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements Player.EventListener {
 
     // Player
     private SimpleExoPlayer player = null;
@@ -54,13 +52,15 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
     private static final String BUFFERING = "BUFFERING";
     private static final String ERROR = "ERROR";
 
-    @Override public String getName() {
+    @Override
+    public String getName() {
         return "RNAudioStreamer";
     }
 
-    @ReactMethod public void setUrl(String urlString) {
+    @ReactMethod
+    public void setUrl(String urlString) {
 
-        if (player != null){
+        if (player != null) {
             player.stop();
             player = null;
             status = "STOPPED";
@@ -72,64 +72,71 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
         LoadControl loadControl = new DefaultLoadControl();
         this.player = ExoPlayerFactory.newSimpleInstance(reactContext, trackSelector, loadControl);
 
-        // Create source
-        ExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();
+        // Measures bandwidth during playback. Can be null if not required.
         DefaultBandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
-        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(reactContext, getDefaultUserAgent(), bandwidthMeter);
-        Handler mainHandler = new Handler();
-        MediaSource audioSource = new ExtractorMediaSource(Uri.parse(urlString), dataSourceFactory, extractorsFactory, mainHandler, this);
-
+        // Produces DataSource instances through which media data is loaded.
+        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(reactContext,
+                getDefaultUserAgent(), bandwidthMeter);
+        // This is the MediaSource representing the media to be played.
+        MediaSource audioSource = new ExtractorMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(Uri.parse(urlString));
         // Start preparing audio
         player.prepare(audioSource);
         player.addListener(this);
     }
 
-    @ReactMethod public void play() {
-        if(player != null) player.setPlayWhenReady(true);
+    @ReactMethod
+    public void play() {
+        if (player != null) player.setPlayWhenReady(true);
     }
 
-    @ReactMethod public void pause() {
-        if(player != null) player.setPlayWhenReady(false);
+    @ReactMethod
+    public void pause() {
+        if (player != null) player.setPlayWhenReady(false);
     }
 
-    @ReactMethod public void seekToTime(double time) {
-        if(player != null) player.seekTo((long)time * 1000);
+    @ReactMethod
+    public void seekToTime(double time) {
+        if (player != null) player.seekTo((long) time * 1000);
     }
 
-    @ReactMethod public void currentTime(Callback callback) {
-        if (player == null){
-            callback.invoke(null,(double)0);
-        }else{
-            callback.invoke(null,(double)(player.getCurrentPosition()/1000));
+    @ReactMethod
+    public void currentTime(Callback callback) {
+        if (player == null) {
+            callback.invoke(null, (double) 0);
+        } else {
+            callback.invoke(null, (double) (player.getCurrentPosition() / 1000));
         }
     }
 
-    @ReactMethod public void status(Callback callback) {
-        callback.invoke(null,status);
+    @ReactMethod
+    public void status(Callback callback) {
+        callback.invoke(null, status);
     }
 
-    @ReactMethod public void duration(Callback callback) {
-        if (player == null){
-            callback.invoke(null,(double)0);
-        }else{
-            callback.invoke(null,(double)(player.getDuration()/1000));
+    @ReactMethod
+    public void duration(Callback callback) {
+        if (player == null) {
+            callback.invoke(null, (double) 0);
+        } else {
+            callback.invoke(null, (double) (player.getDuration() / 1000));
         }
     }
 
     @Override
     public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
-        Log.d("onPlayerStateChanged", ""+playbackState);
+        Log.d("onPlayerStateChanged", "" + playbackState);
 
         switch (playbackState) {
-            case ExoPlayer.STATE_IDLE:
+            case Player.STATE_IDLE:
                 status = STOPPED;
                 this.sendStatusEvent();
                 break;
-            case ExoPlayer.STATE_BUFFERING:
+            case Player.STATE_BUFFERING:
                 status = BUFFERING;
                 this.sendStatusEvent();
                 break;
-            case ExoPlayer.STATE_READY:
+            case Player.STATE_READY:
                 if (this.player != null && this.player.getPlayWhenReady()) {
                     status = PLAYING;
                     this.sendStatusEvent();
@@ -138,11 +145,21 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
                     this.sendStatusEvent();
                 }
                 break;
-            case ExoPlayer.STATE_ENDED:
+            case Player.STATE_ENDED:
                 status = FINISHED;
                 this.sendStatusEvent();
                 break;
         }
+    }
+
+    @Override
+    public void onRepeatModeChanged(int i) {
+
+    }
+
+    @Override
+    public void onShuffleModeEnabledChanged(boolean b) {
+
     }
 
     @Override
@@ -152,16 +169,21 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
     }
 
     @Override
-    public void onPositionDiscontinuity() {
+    public void onPositionDiscontinuity(int reason) {
+
+    }
+
+    @Override
+    public void onPlaybackParametersChanged(PlaybackParameters playbackParameters) {
 
     }
 
     @Override
     public void onLoadingChanged(boolean isLoading) {
-        if (isLoading == true){
+        if (isLoading == true) {
             status = BUFFERING;
             this.sendStatusEvent();
-        }else if (this.player != null){
+        } else if (this.player != null) {
             if (this.player.getPlayWhenReady()) {
                 status = PLAYING;
                 this.sendStatusEvent();
@@ -169,23 +191,23 @@ public class RNAudioStreamerModule extends ReactContextBaseJavaModule implements
                 status = PAUSED;
                 this.sendStatusEvent();
             }
-        }else{
+        } else {
             status = STOPPED;
             this.sendStatusEvent();
         }
     }
 
     @Override
-    public void onLoadError(IOException error) {
-        status = ERROR;
-        this.sendStatusEvent();
+    public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
     }
 
     @Override
-    public void onTimelineChanged(Timeline timeline, Object manifest) {}
+    public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+    }
 
     @Override
-    public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {}
+    public void onSeekProcessed() {
+    }
 
     private static String getDefaultUserAgent() {
         StringBuilder result = new StringBuilder(64);
